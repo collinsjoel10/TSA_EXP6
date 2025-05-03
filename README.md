@@ -1,80 +1,97 @@
-# Ex.No: 6               HOLT WINTERS METHOD
-### Date: 
+# Ex.No: 6   HOLT WINTERS METHOD
 
-
-
-### AIM:
-To create and implement Holt Winter's Method Model using python.
+## AIM:
+To implement the Holt Winters Method Model using Python
 
 ### ALGORITHM:
-1. You import the necessary libraries
-2. You load a CSV file containing daily sales data into a DataFrame, parse the 'date' column as
-datetime, and perform some initial data exploration
-3. You group the data by date and resample it to a monthly frequency (beginning of the month
-4. You plot the time series data
-5. You import the necessary 'statsmodels' libraries for time series analysis
-6. You decompose the time series data into its additive components and plot them:
-7. You calculate the root mean squared error (RMSE) to evaluate the model's performance
-8. You calculate the mean and standard deviation of the entire sales dataset, then fit a Holt-
-Winters model to the entire dataset and make future predictions
-9. You plot the original sales data and the predictions
+1. Load and resample the Rainfall data to monthly frequency, selecting the 'date' column.
+2. Scale the data using Minmaxscaler then split into training (80%) and testing (20%) sets.
+3. Fit an additive Holt-Winters model to the training data and forecast on the test data.
+4. Evaluate model performance using MAE and RMSE, and plot the train, test, and prediction results.
+5. Train a final multiplicative Holt-Winters model on the full dataset and forecast future Rainfall.
 ### PROGRAM:
 ```
-# Import the necessary libraries
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-# Load the dataset
-df = pd.read_csv('ECOMM DATA.csv')
 
-# Convert the 'Order Date' column to datetime format and set it as the index
-df['Order Date'] = pd.to_datetime(df['Order Date'])
-df.set_index('Order Date', inplace=True)
+# Read the CSV without setting the index initially
+data = pd.read_csv('/content/rainfall.csv')  
 
-# Convert 'Profit' column to numeric (removing invalid values)
-df['Profit'] = pd.to_numeric(df['Profit'], errors='coerce')
+# Print the column names to see the actual header
+print(data.columns)  
 
-# Drop rows with missing values in 'Profit' column
-clean_data = df.dropna(subset=['Profit'])
+# Assuming the date column is named 'date' or 'DATE', update the code:
+data = pd.read_csv('/content/rainfall.csv', index_col='date', parse_dates=True)  # Or use 'DATE' if that's the column name
 
-# Extract 'Profit' column for time series forecasting
-profit_data_clean = clean_data['Profit']
+# If there is an extra header row, skip it:
+# data = pd.read_csv('/content/rainfall.csv', skiprows=1, index_col='date', parse_dates=True)
+data = data.resample('MS').mean() 
 
-# Optional: Check for frequency consistency (e.g., daily, weekly, etc.)
-# profit_data_clean = profit_data_clean.asfreq('B')
+# Select the 'PRICE' column for analysis
+data = data['rainfall'] # selecting the rainfall column here
 
-# Define model parameters and perform Holt-Winters exponential smoothing
-# Adjust seasonal_periods to match the data's seasonality
-seasonal_periods = 365  # Example: annual seasonality if data is daily for multiple years
+# Scaling the Data using MinMaxScaler 
+scaler = MinMaxScaler()
+data_scaled = pd.Series(scaler.fit_transform(data.values.reshape(-1, 1)).flatten(), index=data.index)
 
-model = ExponentialSmoothing(profit_data_clean, trend="add", seasonal="add", seasonal_periods=seasonal_periods)
-fit = model.fit()
+# Split into training and testing sets (80% train, 20% test)
+train_data = data_scaled[:int(len(data_scaled) * 0.8)]
+test_data = data_scaled[int(len(data_scaled) * 0.8):]
 
-# Forecast for the next 30 steps (business days)
-n_steps = 30
-forecast = fit.forecast(steps=n_steps)
+# Check if you have enough data for seasonality
+if len(train_data) < 2 * 12:
+    print("Warning: Not enough data for reliable seasonal modeling. Consider using a simpler model or gathering more data.")
+    # Either proceed with caution or switch to a simpler model like SimpleExpSmoothing or Holt
+    fitted_model_add = ExponentialSmoothing(train_data, trend='add').fit()  # Removing seasonal component
+else:
+    fitted_model_add = ExponentialSmoothing(
+        train_data, trend='add', seasonal='add', seasonal_periods=12
+    ).fit()
 
-# Create a date range for the forecast (business days)
-forecast_index = pd.date_range(start=profit_data_clean.index[-1], periods=n_steps+1, freq='B')[1:]
+# Forecast and evaluate
+test_predictions_add = fitted_model_add.forecast(len(test_data))
 
-# Plot the original data and the forecast
-plt.figure(figsize=(10, 6))
-plt.plot(profit_data_clean.index, profit_data_clean, label='Original Profit Data', color='blue')
-plt.plot(forecast_index, forecast, label='Forecasted Profit', color='orange')
-plt.xlabel('Date')
-plt.ylabel('Profit')
-plt.title('Holt-Winters Forecast for E-Commerce Profit Data')
-plt.legend()
-plt.grid(True)
+# Evaluate performance
+print("MAE :", mean_absolute_error(test_data, test_predictions_add))
+print("RMSE :", mean_squared_error(test_data, test_predictions_add, squared=False))
+
+# Plot predictions
+plt.figure(figsize=(12, 8))
+plt.plot(train_data, label='TRAIN', color='black')
+plt.plot(test_data, label='TEST', color='green')
+plt.plot(test_predictions_add, label='PREDICTION', color='red')
+plt.title('Train, Test, and Additive Holt-Winters Predictions')
+plt.legend(loc='best')
+plt.show()
+
+# Similar check for the final model:
+if len(data) < 2 * 12:
+    print("Warning: Not enough data for reliable seasonal modeling in the final model.")
+    final_model = ExponentialSmoothing(data, trend='mul').fit()  # Removing seasonal component
+else:
+    final_model = ExponentialSmoothing(data, trend='mul', seasonal='mul', seasonal_periods=12).fit()
+
+# Forecast future values
+forecast_predictions = final_model.forecast(steps=12)
+
+data.plot(figsize=(12, 8), legend=True, label='Current rainfall')
+forecast_predictions.plot(legend=True, label='Forecasted rainfall') # Calling .plot() on forecast_predictions
+plt.xlabel('percentage')
+plt.ylabel('date')
+plt.title('Rainfall')
 plt.show()
 ```
-### OUTPUT:
+## OUTPUT:
+#### TEST_PREDICTION
+![image](https://github.com/user-attachments/assets/1804dcc2-3477-450a-a342-38ddaa34eb8f)
 
+### FINAL_PREDICTION
 
-![image](https://github.com/user-attachments/assets/b6f6d0ef-10c4-4a41-be70-d0f698c4a05e)
+![image](https://github.com/user-attachments/assets/e70de3f1-6473-4f36-86b5-1a62645dd241)
 
-
-### RESULT:
+## RESULT:
 Thus the program run successfully based on the Holt Winters Method model.
